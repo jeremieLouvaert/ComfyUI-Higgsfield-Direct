@@ -1,0 +1,14 @@
+[project]
+name = "comfyui-higgsfield-direct"
+description = "Direct Higgsfield API integration — multi-model image and video generation with Soul 2.0, Seedream 4, Kling 2.1"
+version = "1.0.0"
+license = { file = "LICENSE" }
+dependencies = ["higgsfield-client"]
+
+[project.urls]
+Repository = "https://github.com/jeremieLouvaert/ComfyUI-Higgsfield-Direct"
+
+[tool.comfy]
+PublisherId = "jeremieLouvaert"
+DisplayName = "ComfyUI Higgsfield Direct"
+Icon = ""
