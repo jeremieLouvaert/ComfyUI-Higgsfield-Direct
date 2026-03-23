@@ -9,6 +9,6 @@ dependencies = ["higgsfield-client"]
 Repository = "https://github.com/jeremieLouvaert/ComfyUI-Higgsfield-Direct"
 
 [tool.comfy]
-PublisherId = "jeremieLouvaert"
+PublisherId = "akurate"
 DisplayName = "ComfyUI Higgsfield Direct"
 Icon = ""
