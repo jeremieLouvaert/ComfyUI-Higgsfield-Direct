@@ -7,7 +7,7 @@ through a single node. Uses your own Higgsfield API key.
 Features:
   - Text-to-image generation with multiple models
   - Image-to-image editing (Seedream edit)
-  - Image-to-video generation (Kling, Sora, etc.)
+  - Image-to-video generation (Kling, Seedance, DOP) with native ComfyUI VIDEO output
   - Reference image upload (Soul ID character consistency)
   - Real USD cost awareness
   - cache_key output for Hash Vault compatibility
@@ -36,6 +36,15 @@ try:
     HAS_HF = True
 except ImportError:
     HAS_HF = False
+
+# Native ComfyUI VIDEO type. Present on any build with comfy_api (mid-2025 onward).
+# Older builds fall back to the URL-only output.
+try:
+    from comfy_api.input_impl import VideoFromFile
+    HAS_VIDEO_TYPE = True
+except ImportError:
+    VideoFromFile = None
+    HAS_VIDEO_TYPE = False
 
 # ---------------------------------------------------------------------------
 # CONSTANTS
@@ -164,6 +173,31 @@ def _download_image(url):
 def _upload_image(pil_image):
     """Upload a PIL image to Higgsfield and return the URL."""
     return higgsfield_client.upload_image(pil_image, format='jpeg')
+
+
+def _download_video(url, dest_path):
+    """Stream a generated video to disk.
+
+    Higgsfield retains generated files for a minimum of 7 days, so the returned URL
+    is not a durable artifact. Pulling the bytes down is what makes the result survive.
+    """
+    import httpx
+    with httpx.stream("GET", url, follow_redirects=True, timeout=300.0) as response:
+        response.raise_for_status()
+        with open(dest_path, "wb") as f:
+            for chunk in response.iter_bytes(chunk_size=1 << 20):
+                f.write(chunk)
+    return dest_path
+
+
+def _video_output_path(prefix="higgsfield_i2v", ext="mp4"):
+    """Build a timestamped path inside the ComfyUI output directory."""
+    if folder_paths is None:
+        output_dir = os.path.dirname(__file__)
+    else:
+        output_dir = folder_paths.get_output_directory()
+    timestamp = int(time.time() * 1000)
+    return os.path.join(output_dir, f"{prefix}_{timestamp}.{ext}")
 
 
 def _save_image(pil_image, prefix="higgsfield"):
@@ -416,16 +450,18 @@ class HiggsFieldImageToVideo:
                     "default": "",
                     "placeholder": "key:secret (or use env/file)",
                 }),
+                "auto_save": ("BOOLEAN", {"default": True}),
             }
         }
 
-    RETURN_TYPES = ("STRING", "STRING", "STRING",)
-    RETURN_NAMES = ("video_url", "cache_key", "info",)
+    # VIDEO is appended, not prepended, so existing workflow wiring keeps its slot indices.
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "VIDEO",)
+    RETURN_NAMES = ("video_url", "cache_key", "info", "video",)
     FUNCTION = "generate_video"
     CATEGORY = CATEGORY
     OUTPUT_NODE = True
 
-    def generate_video(self, image, prompt, model, duration, api_key=""):
+    def generate_video(self, image, prompt, model, duration, api_key="", auto_save=True):
         _check_sdk()
         credential_key = _resolve_api_key(api_key)
         _set_credentials(credential_key)
@@ -473,11 +509,47 @@ class HiggsFieldImageToVideo:
 
         cache_key = _make_cache_key(model, prompt, duration=duration)
 
-        info = f"Model: {model_name} | Duration: {duration}s | Time: {elapsed:.1f}s"
+        # The remote URL expires (Higgsfield keeps files a minimum of 7 days), so pull the
+        # bytes down before handing anything back. auto_save decides whether the file lands
+        # in output/ (kept) or temp/ (cleared with the session).
+        ext = os.path.splitext(video_url.split("?")[0])[1].lstrip(".") or "mp4"
+        local_path = _video_output_path(prefix="higgsfield_i2v", ext=ext)
+        if not auto_save and folder_paths is not None:
+            local_path = os.path.join(
+                folder_paths.get_temp_directory(), os.path.basename(local_path)
+            )
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+        video_obj = None
+        try:
+            _download_video(video_url, local_path)
+            size_mb = os.path.getsize(local_path) / (1024 * 1024)
+            print(f"[Higgsfield] Downloaded video ({size_mb:.1f} MB): {local_path}")
+            if HAS_VIDEO_TYPE:
+                video_obj = VideoFromFile(local_path)
+            else:
+                print(
+                    "[Higgsfield] comfy_api VIDEO type unavailable on this ComfyUI build — "
+                    "the video output slot will be empty. The file on disk is still valid."
+                )
+        except Exception as e:
+            # A download failure must not throw away a generation that was already paid for.
+            print(f"[Higgsfield] WARNING: could not download the video ({e}).")
+            print(f"[Higgsfield] The URL below is still live, but expires in ~7 days.")
+            local_path = None
+
+        info_parts = [
+            f"Model: {model_name}",
+            f"Duration: {duration}s",
+            f"Time: {elapsed:.1f}s",
+        ]
+        if local_path:
+            info_parts.append(f"Saved: {os.path.basename(local_path)}")
+        info = " | ".join(info_parts)
         print(f"[Higgsfield] Video done — {info}")
         print(f"[Higgsfield] Video URL: {video_url}")
 
-        return (video_url, cache_key, info,)
+        return (video_url, cache_key, info, video_obj,)
 
 
 # ---------------------------------------------------------------------------

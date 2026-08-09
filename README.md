@@ -1,5 +1,7 @@
 # ComfyUI-Higgsfield-Direct
 
+![The Higgs field, the one this API is named after](assets/higgs-field-banner.jpg)
+
 **Direct Higgsfield API integration for ComfyUI** — unified access to 100+ generative models through a single node pack.
 
 No credits system, no middleman. Uses your own Higgsfield API key with transparent pricing.
@@ -8,19 +10,19 @@ No credits system, no middleman. Uses your own Higgsfield API key with transpare
 
 | Node | Description |
 |------|-------------|
-| **Higgsfield Text-to-Image** | Generate images from text prompts (Soul 2.0, Seedream 4, Reve, FLUX) |
+| **Higgsfield Text-to-Image** | Generate images from text prompts (Soul, Seedream 4, Reve) |
 | **Higgsfield Image Edit** | Edit existing images with text instructions (Seedream 4 Edit) |
-| **Higgsfield Image-to-Video** | Convert images to video (Kling 2.1, Seedance, DOP) |
+| **Higgsfield Image-to-Video** | Convert images to video (Kling 2.1, Seedance, DOP), returns a native ComfyUI `VIDEO` |
 | **Higgsfield Model Info** | List all available models and capabilities |
 
 ## Features
 
-- **Multi-model access** — Switch between Soul 2.0, Seedream 4, Reve, Kling, and more
+- **Multi-model access** — Switch between Soul, Seedream 4, Reve, Seedance, Kling and DOP
 - **Reference image support** — Upload reference images for style/character consistency (Soul ID)
 - **Resolution control** — 1K, 2K, 4K output options
 - **Aspect ratio presets** — 1:1, 2:3, 3:2, 4:3, 9:16, 16:9, 21:9
-- **Video generation** — 5/10/15 second clips from a source image
-- **Auto-save** — Generated images saved to ComfyUI output folder
+- **Video generation** — 5/10/15 second clips from a source image, wired straight into any `VIDEO` node
+- **Auto-save** — Generated images and videos saved to the ComfyUI output folder
 - **Hash Vault compatible** — Outputs `cache_key` for use with ComfyUI-API-Optimizer
 
 ## Installation
@@ -84,6 +86,14 @@ Nodes appear under the **AKURATE/Higgsfield** category.
 
 Higgsfield charges per generation. Failed/NSFW requests are not charged.
 Check [higgsfield.ai/pricing](https://higgsfield.ai/pricing) for current rates.
+
+## A note on file retention
+
+Higgsfield keeps generated files for a minimum of 7 days, after which the returned URL
+stops resolving. Every node here downloads the result and writes it into your ComfyUI
+output folder, so the artifact outlives the link. The `video_url` output is still there
+if you want it, but treat it as short-lived. Set `auto_save` to false on the video node
+and the file goes to the temp folder instead, cleared with the session.
 
 ## License
 
